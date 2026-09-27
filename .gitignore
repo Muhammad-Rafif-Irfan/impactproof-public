@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+.env
+.env.*
+!.env.example
+
+# The demo repository has its own Git history.
+# Keep it physically for the runtime analyzer, but don't track it
+# as part of the outer public repository.
+demo/.git/
+
+# Local ImpactProof state
+**/impactproof/undo_state.json
+**/.impactproof/

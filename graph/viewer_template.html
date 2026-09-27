@@ -1,0 +1,1840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImpactProof — Impact Graph</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: #0f1117;
+    color: #e6edf3;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 10px 18px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 15px; font-weight: 700; color: #e6edf3; flex-shrink: 0; }
+  .product-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .product-promise { color: #c9d1d9; font-size: 12px; font-weight: 600; }
+  .product-story { color: #6e7681; font-size: 10px; letter-spacing: .02em; }
+  header .repo { margin-left: auto; font-size: 11px; color: #8b949e; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .investigate-bar { padding: 10px 18px; background: #111820; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  #investigate-button { border: 1px solid #388bfd; border-radius: 6px; background: #1f6feb; color: white; padding: 10px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  #investigate-button:hover:not(:disabled) { background: #388bfd; }
+  #investigate-button:disabled { opacity: .55; cursor: not-allowed; }
+  #investigation-status { min-width: 240px; flex: 1; font-size: 12px; color: #8b949e; }
+  #investigation-message { color: #c9d1d9; margin-bottom: 6px; }
+  .investigation-stages { display: flex; flex-wrap: wrap; gap: 6px; }
+  .investigation-stage { padding: 3px 7px; border-radius: 12px; border: 1px solid #30363d; color: #8b949e; font-size: 10px; white-space: nowrap; }
+  .investigation-stage.running { border-color: #388bfd; color: #79c0ff; background: #10233b; }
+  .investigation-stage.complete { border-color: #238636; color: #3fb950; background: #102719; }
+  .investigation-stage.error { border-color: #9e6a03; color: #e3b341; background: #2d2100; }
+  #investigation-outcome { min-width: 280px; max-width: 460px; }
+  #investigation-result { font-size: 16px; font-weight: 800; letter-spacing: .03em; }
+  #investigation-result.regression { color: #ff6b6b; }
+  #investigation-result.pass { color: #3fb950; }
+  #investigation-result.error { color: #e3b341; }
+  #investigation-result.verified { color: #3fb950; }
+  #investigation-summary { display: none; margin-top: 5px; grid-template-columns: auto minmax(0, 1fr); gap: 3px 9px; font-size: 11px; line-height: 1.4; }
+  #investigation-summary.visible { display: grid; }
+  #investigation-summary .summary-label { color: #8b949e; }
+  #investigation-summary .summary-value { color: #e6edf3; font-family: monospace; overflow-wrap: anywhere; }
+  #investigation-summary .summary-label-expected { color: #8b949e; }
+  #investigation-summary .summary-label-actual + .summary-value { color: #ffb3b3; font-weight: 700; }
+  #investigation-summary .summary-label-before-after + .summary-value { color: #3fb950; }
+
+  /* ── Summary bar ── */
+  .summary-bar {
+    padding: 7px 18px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    gap: 20px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .stat { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+  .stat.stat-secondary { opacity: .68; font-size: 10px; }
+  .stat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .stat-label { color: #8b949e; }
+  .stat-value { font-weight: 600; color: #e6edf3; }
+
+  /* ── Legend ── */
+  .legend {
+    padding: 6px 18px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    gap: 16px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .legend-title { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #8b949e; }
+  .legend-item.edge-legend-item { gap: 4px; font-size: 10px; color: #6e7681; }
+  .legend-swatch { width: 11px; height: 11px; border-radius: 50%; }
+
+  /* ── Main layout: [explorer] [graph] [detail] ── */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Node Explorer (left panel) ── */
+  .explorer-panel {
+    width: 220px;
+    min-width: 180px;
+    background: #161b22;
+    border-right: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .explorer-header {
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid #30363d;
+    font-size: 11px;
+    font-weight: 700;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    flex-shrink: 0;
+  }
+  .explorer-scroll {
+    overflow-y: auto;
+    flex: 1;
+    padding-bottom: 8px;
+  }
+
+  /* Group rows */
+  .group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: #c9d1d9;
+    border-bottom: 1px solid transparent;
+    transition: background 0.1s;
+  }
+  .group-header:hover { background: #1f242c; }
+  .group-header.group-regression { color: #ff6b6b; }
+  .group-header.group-regression.has-regressions {
+    background: #2a1519;
+    border-bottom: 1px solid #702d35;
+  }
+  .group-chevron {
+    font-size: 9px;
+    color: #484f58;
+    width: 10px;
+    flex-shrink: 0;
+    transition: transform 0.15s;
+  }
+  .group-chevron.open { transform: rotate(90deg); }
+  .group-count {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 600;
+    color: #484f58;
+    background: #0d1117;
+    border-radius: 10px;
+    padding: 1px 6px;
+    flex-shrink: 0;
+  }
+  .group-regression .group-count { color: #ff8a8a; background: #35191e; }
+
+  /* Node list inside group */
+  .node-list {
+    display: none;
+    flex-direction: column;
+  }
+  .node-list.open { display: flex; }
+  .node-list-item {
+    padding: 4px 12px 4px 28px;
+    font-size: 11px;
+    color: #8b949e;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-left: 2px solid transparent;
+    transition: background 0.1s, color 0.1s;
+  }
+  .node-list-item:hover { background: #1f242c; color: #c9d1d9; }
+  .node-list-item.active {
+    color: #e6edf3;
+    background: #1f2d3d;
+    border-left-color: #388bfd;
+    font-weight: 600;
+  }
+  .node-list-item.active.regression-item {
+    background: #2a1519;
+    border-left-color: #ff6b6b;
+  }
+
+  /* ── Graph canvas ── */
+  #graph-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+  svg {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+  }
+  svg:active { cursor: grabbing; }
+
+  /* Node circles */
+  .node circle {
+    stroke-width: 2px;
+    cursor: pointer;
+    transition: stroke-width 0.15s, filter 0.15s;
+  }
+  .node circle:hover { stroke-width: 3.5px; filter: brightness(1.25); }
+  .node.selected circle { stroke-width: 4px; filter: brightness(1.4); }
+  .node.regression-node circle { fill: #3a171b; }
+  .node.regression-node text { fill: #ffb3b3; font-weight: 700; }
+
+  /* Node labels */
+  .node text {
+    font-size: 10px;
+    fill: #c9d1d9;
+    pointer-events: none;
+    text-anchor: middle;
+    dominant-baseline: hanging;
+  }
+
+  /* Edges */
+  .link { stroke: #30363d; stroke-width: 1.5px; fill: none; }
+  .link.calls_or_uses { stroke: #388bfd; stroke-width: 1.5px; }
+  .link.import { stroke: #8b949e; stroke-width: 1.2px; stroke-dasharray: 4 3; }
+
+  /* Arrow markers */
+  marker path { fill: #30363d; }
+  marker.calls path { fill: #388bfd; }
+  marker.imp   path { fill: #8b949e; }
+
+  /* ── Right side panel (detail) ── */
+  .side-panel {
+    width: 280px;
+    min-width: 220px;
+    background: #161b22;
+    border-left: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .panel-header {
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid #30363d;
+    font-size: 12px;
+    font-weight: 600;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .panel-body { padding: 14px; overflow-y: auto; flex: 1; }
+  .panel-empty { font-size: 12px; color: #484f58; margin-top: 8px; }
+
+  .detail-row { margin-bottom: 12px; }
+  .detail-label {
+    font-size: 10px; color: #8b949e; text-transform: uppercase;
+    letter-spacing: 0.04em; margin-bottom: 3px;
+  }
+  .detail-value { font-size: 12px; color: #e6edf3; font-family: monospace; word-break: break-all; }
+
+  .detail-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
+  }
+  .badge-CHANGED    { background: #3d1f00; color: #f78166; border: 1px solid #f78166; }
+  .badge-DIRECT     { background: #1f2d3d; color: #388bfd; border: 1px solid #388bfd; }
+  .badge-INDIRECT   { background: #1f2a1f; color: #3fb950; border: 1px solid #3fb950; }
+  .badge-REGRESSION { background: #3a171b; color: #ff8a8a; border: 1px solid #ff6b6b; }
+  .badge-PASS       { background: #1f2a1f; color: #3fb950; border: 1px solid #3fb950; }
+  .badge-ERROR      { background: #2d2100; color: #e3b341; border: 1px solid #e3b341; }
+
+  /* ── Proof evidence ── */
+  .proof-section { margin-top: 14px; padding-top: 12px; border-top: 1px solid #30363d; }
+  .proof-title { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+  .proof-kv { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+  .proof-kv-label { color: #8b949e; }
+  .proof-kv-value { color: #e6edf3; font-family: monospace; }
+  .proof-kv-value.mismatch { color: #ff8a8a; font-weight: 700; }
+  .proof-kv-value.pass     { color: #3fb950; }
+
+  /* ── Relationships ── */
+  .rels-section { margin-top: 14px; }
+  .rels-title { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .rel-item {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 5px;
+    padding: 7px 9px; margin-bottom: 6px; font-size: 11px; color: #8b949e; line-height: 1.5;
+  }
+  .rel-item strong { color: #c9d1d9; }
+
+  /* ── demo Explain → Apply Fix → Verify workflow section ── */
+  .efv-section {
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid #702d35;
+  }
+  .efv-title {
+    font-size: 10px; font-weight: 700; color: #ff8a8a; text-transform: uppercase;
+    letter-spacing: 0.07em; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .efv-badge {
+    display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 9px;
+    font-weight: 700; letter-spacing: 0.05em; background: #3a171b; color: #ff8a8a;
+    border: 1px solid #ff6b6b;
+  }
+  .efv-step {
+    margin-bottom: 10px;
+  }
+  .efv-step-label {
+    font-size: 9px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .efv-step-content {
+    font-size: 11px; color: #c9d1d9; background: #0d1117; border: 1px solid #30363d;
+    border-radius: 4px; padding: 7px 9px; line-height: 1.55; white-space: pre-wrap;
+    word-break: break-word; max-height: 180px; overflow-y: auto;
+  }
+  .efv-chain {
+    font-size: 11px; color: #8b949e; font-family: monospace;
+    background: #0d1117; border: 1px solid #30363d; border-radius: 4px;
+    padding: 6px 9px; line-height: 1.7;
+  }
+  .efv-chain .chain-arrow { color: #484f58; }
+  .efv-chain .chain-node  { color: #388bfd; }
+  .efv-chain .chain-node.regression { color: #ff8a8a; }
+  .efv-verify-result {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    border-radius: 5px; font-size: 12px; font-weight: 600; margin-bottom: 6px;
+  }
+  .efv-verify-pass { background: #1f2a1f; border: 1px solid #3fb950; color: #3fb950; }
+  .efv-verify-regression { background: #3a171b; border: 1px solid #ff6b6b; color: #ff8a8a; }
+  .efv-verify-error { background: #2d2100; border: 1px solid #e3b341; color: #e3b341; }
+  .efv-hint {
+    font-size: 10px; color: #484f58; margin-top: 6px; line-height: 1.5;
+  }
+  .efv-steps { display: flex; align-items: center; gap: 5px; margin-bottom: 10px; }
+  .efv-state { border: 1px solid #30363d; border-radius: 12px; padding: 3px 7px; color: #8b949e; font-size: 9px; font-weight: 700; }
+  .efv-state.complete { color: #3fb950; border-color: #238636; background: #102719; }
+  .efv-state.failed { color: #ff8a8a; border-color: #ff6b6b; background: #3a171b; }
+  .efv-arrow { color: #484f58; font-size: 10px; }
+  .evidence-table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; font-size: 10px; }
+  .evidence-table th { color: #8b949e; font-size: 9px; text-align: left; text-transform: uppercase; letter-spacing: .04em; padding: 4px 5px; border-bottom: 1px solid #30363d; }
+  .evidence-table td { padding: 5px; border-bottom: 1px solid #21262d; font-family: monospace; overflow-wrap: anywhere; }
+  .evidence-table .mismatch-row td { color: #ff8a8a; font-weight: 700; }
+  .verified-comparison { padding: 8px; border: 1px solid #238636; border-radius: 5px; background: #102719; margin: 6px 0; }
+  .verified-comparison-title { color: #3fb950; font-size: 11px; font-weight: 800; margin-bottom: 5px; }
+  .efv-undo-btn {
+    margin-top: 8px; padding: 7px 10px; border-radius: 5px; border: 1px solid #8b6f2e;
+    background: #2b2111; color: #f0c674; font-size: 11px; font-weight: 700; cursor: pointer;
+  }
+  .efv-undo-btn:disabled { opacity: .6; cursor: wait; }
+  .efv-undo-result { margin-top: 7px; font-size: 10px; line-height: 1.5; color: #f0c674; }
+  .efv-undo-scope { margin-top: 4px; font-size: 10px; line-height: 1.4; color: #8b949e; }
+  .demo-analyze-btn {
+    margin: 2px 0 8px; padding: 8px 10px; border: 1px solid #388bfd; border-radius: 5px;
+    background: #1f6feb; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer;
+  }
+  .demo-analyze-btn:hover:not(:disabled) { background: #388bfd; }
+  .demo-analyze-btn:disabled { opacity: .6; cursor: wait; }
+  .demo-analysis-status { margin: 3px 0 8px; font-size: 11px; line-height: 1.5; color: #8b949e; }
+  .demo-fix-btn, .demo-verify-btn {
+    margin: 4px 6px 6px 0; padding: 7px 10px; border: 1px solid #238636;
+    border-radius: 5px; background: #1f6f3d; color: #fff; font-size: 10px;
+    font-weight: 700; cursor: pointer;
+  }
+  .demo-fix-btn:disabled, .demo-verify-btn:disabled { opacity: .6; cursor: wait; }
+  .demo-verify-btn { border-color: #388bfd; background: #1f6feb; }
+  .demo-fix-status { margin: 4px 0 8px; color: #8b949e; font-size: 10px; line-height: 1.5; }
+  .demo-fix-result { margin: 5px 0; color: #3fb950; font-size: 10px; line-height: 1.5; }
+  .demo-analysis-block { margin: 8px 0; }
+  .demo-analysis-label { margin-bottom: 3px; color: #8b949e; font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .demo-analysis-text { color: #c9d1d9; font-size: 11px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  @media (max-width: 900px) {
+    .investigate-bar { align-items: flex-start; flex-wrap: wrap; }
+    #investigation-status { min-width: 100%; order: 3; }
+    #investigation-outcome { flex: 1; min-width: 200px; }
+    .explorer-panel { width: 190px; min-width: 160px; }
+    .side-panel { width: 250px; min-width: 210px; }
+  }
+
+  /* ── No-data overlay ── */
+  #no-data {
+    display: none; position: absolute; inset: 0;
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 10px; color: #484f58; font-size: 14px;
+  }
+  #no-data.visible { display: flex; }
+
+  /* ── Final presentation polish: engineering console hierarchy ── */
+  :root {
+    color-scheme: dark;
+    --surface-0: #0b0f14;
+    --surface-1: #10161e;
+    --surface-2: #151d27;
+    --surface-3: #1b2632;
+    --line-soft: #263342;
+    --text-primary: #e6edf3;
+    --text-secondary: #9aa9b8;
+    --text-muted: #708091;
+    --accent: #68a9ff;
+    --danger: #ff7b82;
+    --success: #56d28a;
+    --warning: #efbd62;
+  }
+
+  body { background: var(--surface-0); color: var(--text-primary); }
+
+  header {
+    min-height: 64px;
+    padding: 11px 22px;
+    gap: 16px;
+    background: #111821;
+    border-bottom-color: var(--line-soft);
+  }
+  header h1 { font-size: 17px; letter-spacing: -.035em; }
+  .product-copy { gap: 4px; }
+  .product-promise { color: #e8eef5; font-size: 13px; font-weight: 650; letter-spacing: -.01em; }
+  .product-story { color: var(--text-muted); font-size: 10px; letter-spacing: .055em; }
+  header .repo {
+    max-width: min(34vw, 440px);
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 6px 9px;
+    border: 1px solid #25313e;
+    border-radius: 5px;
+    background: #0e141b;
+  }
+
+  .investigate-bar {
+    min-height: 76px;
+    padding: 12px 22px;
+    gap: 18px;
+    background: #0e141b;
+    border-bottom-color: var(--line-soft);
+  }
+  #investigate-button {
+    min-height: 42px;
+    padding: 0 17px;
+    border: 1px solid #418bf0;
+    border-radius: 6px;
+    background: #246fd0;
+    box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 3px 10px rgba(16,75,147,.18);
+    letter-spacing: .025em;
+    transition: background-color .15s ease, border-color .15s ease, transform .15s ease;
+  }
+  #investigate-button:hover:not(:disabled) { background: #2f80e6; border-color: #65a4fa; transform: translateY(-1px); }
+  #investigate-button:active:not(:disabled) { transform: translateY(0); }
+  #investigate-button:focus-visible, button:focus-visible, .group-header:focus-visible,
+  .node-list-item:focus-visible { outline: 2px solid #a4ccff; outline-offset: 3px; }
+  #investigation-status { min-width: 260px; color: var(--text-secondary); }
+  #investigation-message { color: #c3ced8; font-size: 11px; font-weight: 550; }
+  .investigation-stages { gap: 7px; }
+  .investigation-stage {
+    padding: 4px 8px;
+    border-color: #2a3744;
+    border-radius: 5px;
+    color: #8796a5;
+    background: #121a23;
+    font-size: 10px;
+  }
+  .investigation-stage.running { border-color: #3d78be; color: #a4ccff; background: #142438; }
+  .investigation-stage.complete { border-color: #347d56; color: #83dfaa; background: #14251d; }
+  .investigation-stage.error { border-color: #997333; color: #f0cd83; background: #292216; }
+  #investigation-outcome { min-width: 275px; }
+  #investigation-result { font-size: 15px; letter-spacing: .045em; }
+  #investigation-result.regression { color: #ff9096; }
+  #investigation-result.pass, #investigation-result.verified { color: #69db98; }
+  #investigation-result.error { color: #efc36f; }
+  #investigation-summary { margin-top: 6px; gap: 3px 10px; font-size: 10px; }
+  #investigation-summary .summary-label { color: var(--text-muted); }
+  #investigation-summary .summary-value { color: #d8e1e9; }
+  #investigation-summary .summary-label-actual + .summary-value { color: #ff9da2; font-weight: 700; }
+  #investigation-summary .summary-label-before-after + .summary-value { color: #73dda0; }
+
+  .summary-bar {
+    min-height: 38px;
+    padding: 7px 22px;
+    gap: 8px;
+    background: #111821;
+    border-bottom-color: var(--line-soft);
+  }
+  .stat {
+    gap: 6px;
+    padding: 4px 9px;
+    border: 1px solid #26323e;
+    border-radius: 5px;
+    background: #141d27;
+    font-size: 10px;
+  }
+  .stat.stat-secondary { opacity: .78; font-size: 9px; background: transparent; }
+  .stat-dot { width: 7px; height: 7px; }
+  .stat-label { color: var(--text-muted); }
+  .stat-value { color: #dce5ed; font-variant-numeric: tabular-nums; }
+
+  .legend {
+    min-height: 38px;
+    padding: 7px 22px;
+    gap: 14px;
+    background: #0e141b;
+    border-bottom-color: var(--line-soft);
+  }
+  .legend-title { color: #8998a7; font-size: 9px; letter-spacing: .09em; }
+  .legend-item { color: #b0bdc9; font-size: 10px; }
+  .legend-item.edge-legend-item { color: #8291a0; font-size: 9px; }
+  .legend-swatch { width: 9px; height: 9px; }
+
+  .main { min-height: 0; background: var(--surface-0); }
+  .main[hidden], .legend[hidden] { display: none; }
+  .dashboard-idle {
+    min-height: 220px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 28px;
+    text-align: center;
+    color: #8c9ba9;
+    background-color: #0c1218;
+    background-image: radial-gradient(rgba(124,148,170,.10) .65px, transparent .65px);
+    background-size: 22px 22px;
+  }
+  .dashboard-idle[hidden] { display: none; }
+  .idle-kicker { color: #8293a2; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+  .dashboard-idle h2 { color: #dbe5ed; font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
+  .dashboard-idle p { max-width: 470px; color: #8c9ba9; font-size: 11px; line-height: 1.65; }
+  .summary-empty { padding: 4px 9px; border: 1px solid #2a3744; border-radius: 5px; color: #a2b0bd; background: #141d27; font-size: 10px; }
+  .graph-heading {
+    position: absolute;
+    z-index: 1;
+    top: 15px;
+    left: 17px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: none;
+  }
+  .graph-heading[hidden] { display: none; }
+  .graph-heading strong { color: #d6e5f3; font-size: 10px; letter-spacing: .11em; }
+  .graph-heading span { color: #8191a0; font-size: 9px; }
+  .explorer-panel, .side-panel { background: var(--surface-1); border-color: var(--line-soft); }
+  .explorer-panel { width: 232px; min-width: 205px; }
+  .side-panel { width: 310px; min-width: 270px; }
+  .explorer-header, .panel-header {
+    padding: 13px 15px 11px;
+    color: #a8b6c3;
+    border-bottom-color: var(--line-soft);
+    font-size: 10px;
+    letter-spacing: .1em;
+  }
+  .explorer-scroll { padding: 7px 0 12px; }
+  .group-header {
+    min-height: 36px;
+    padding: 7px 13px;
+    gap: 8px;
+    color: #c9d3dc;
+    font-size: 11px;
+  }
+  .group-header:hover { background: #1a2530; }
+  .group-header.group-regression { color: #ff9ba0; }
+  .group-header.group-regression.has-regressions { background: #28191d; border-bottom-color: #573038; }
+  .group-chevron { color: #667585; }
+  .group-count { color: #a8b6c3; background: #0d131a; font-variant-numeric: tabular-nums; }
+  .group-regression .group-count { color: #ffabb0; background: #351d22; }
+  .node-list { padding: 2px 0 5px; }
+  .node-list-item {
+    padding: 6px 12px 6px 31px;
+    color: #91a0ae;
+    font-size: 10px;
+    border-left-width: 2px;
+  }
+  .node-list-item:hover { background: #18232e; color: #e2e9ef; }
+  .node-list-item.active { color: #e8f1fa; background: #192b3d; border-left-color: #70afff; }
+  .node-list-item.active.regression-item { color: #ffd1d3; background: #311d22; border-left-color: #ff858c; }
+
+  #graph-container {
+    background-color: #0c1218;
+    background-image: radial-gradient(rgba(124,148,170,.12) .65px, transparent .65px);
+    background-size: 22px 22px;
+  }
+  .link { stroke: #394754; stroke-opacity: .78; }
+  .link.calls_or_uses { stroke: #5799e9; stroke-opacity: .82; }
+  .link.import { stroke: #8795a2; stroke-opacity: .62; }
+  .node circle { transition: stroke-width .14s ease, filter .14s ease; }
+  .node circle:hover { filter: brightness(1.25) drop-shadow(0 0 5px rgba(139,184,232,.36)); }
+  .node.selected circle { stroke-width: 4px; filter: brightness(1.22) drop-shadow(0 0 7px rgba(122,177,237,.42)); }
+  .node.regression-node circle { fill: #421e24; }
+  .node.regression-node text { fill: #ffc0c3; }
+  .node text {
+    font-size: 11px;
+    font-weight: 550;
+    fill: #d1dbe4;
+    paint-order: stroke;
+    stroke: #0c1218;
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+
+  .panel-body { padding: 16px; }
+  .panel-empty { color: #7a8997; line-height: 1.6; }
+  .detail-row { margin-bottom: 14px; }
+  .detail-label { color: #8796a5; font-size: 9px; letter-spacing: .09em; }
+  .detail-value { color: #e0e8ef; font-size: 11px; line-height: 1.5; }
+  .detail-badge { padding: 3px 8px; border-radius: 4px; font-size: 9px; letter-spacing: .06em; }
+  .badge-CHANGED { background: #30201d; color: #ff9b7e; border-color: #a85f4f; }
+  .badge-DIRECT { background: #17283a; color: #8bbcff; border-color: #477cb7; }
+  .badge-INDIRECT { background: #17291f; color: #82dca0; border-color: #43835a; }
+  .badge-REGRESSION { background: #351e23; color: #ffabb0; border-color: #a64e58; }
+  .badge-PASS { background: #17291f; color: #82dca0; border-color: #43835a; }
+  .badge-ERROR { background: #2a2418; color: #f0ca78; border-color: #92713b; }
+
+  .proof-section { margin-top: 16px; padding-top: 14px; border-top-color: #2e3b48; }
+  .proof-title {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 11px;
+    padding: 5px 7px;
+    color: #a9d2ff;
+    background: #15273a;
+    border: 1px solid #315475;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 750;
+    letter-spacing: .075em;
+  }
+  .proof-subtitle { margin: -5px 0 11px; color: #8292a0; font-size: 9px; line-height: 1.5; }
+  .proof-kv { gap: 12px; font-size: 10px; line-height: 1.45; }
+  .proof-kv-label { color: #8493a2; }
+  .proof-kv-value { color: #dce5ec; text-align: right; }
+  .proof-kv-value.mismatch { color: #ff9da2; }
+  .proof-kv-value.pass { color: #75dda0; }
+  .evidence-table { margin: 6px 0 10px; border: 1px solid #2a3743; border-radius: 5px; overflow: hidden; }
+  .evidence-table th { padding: 7px 8px; background: #17212b; border-bottom-color: #34424f; font-size: 8px; letter-spacing: .08em; }
+  .evidence-table td { padding: 8px; color: #d4dee7; border-bottom-color: #26323e; font-size: 10px; }
+  .evidence-table td:first-child { color: #aab8c5; }
+  .evidence-table td:nth-child(2) { color: #9ed5b3; }
+  .evidence-table td:nth-child(3) { color: #ff9da2; }
+  .evidence-table .mismatch-row td { font-weight: 650; }
+  .evidence-table .matched-row td:nth-child(2), .evidence-table .matched-row td:nth-child(3) { color: #90d5a7; }
+
+  .rels-section { margin-top: 16px; }
+  .rels-title { color: #8c9ba9; font-size: 9px; letter-spacing: .09em; }
+  .rel-item { background: #101820; border-color: #293743; border-radius: 5px; color: #9aa9b7; padding: 8px 9px; font-size: 10px; }
+  .rel-item strong { color: #d1dce5; }
+
+  .efv-section { margin-top: 17px; padding-top: 14px; border-top-color: #493039; }
+  .efv-title { color: #f0b6bb; font-size: 10px; letter-spacing: .065em; }
+  .efv-badge { padding: 3px 6px; background: #261b23; color: #d9aeb8; border-color: #654452; font-size: 8px; }
+  .efv-steps { gap: 5px; flex-wrap: wrap; }
+  .efv-state { padding: 4px 7px; border-radius: 4px; color: #9aa8b5; background: #141b23; font-size: 8px; }
+  .efv-state.complete { color: #8cdbab; border-color: #3c7653; background: #17271e; }
+  .efv-state.failed { color: #ffb0b4; border-color: #8c4850; background: #311e22; }
+  .efv-step { margin-bottom: 12px; }
+  .efv-step-label, .demo-analysis-label { color: #8797a6; font-size: 8px; letter-spacing: .09em; }
+  .efv-step-content, .efv-chain { background: #101820; border-color: #2b3945; border-radius: 5px; color: #c6d1da; }
+  .efv-verify-result { border-radius: 5px; font-size: 11px; letter-spacing: .035em; }
+  .efv-verify-pass { background: #17291f; border-color: #43835a; color: #8de2ab; }
+  .efv-verify-regression { background: #351e23; border-color: #a64e58; color: #ffadb2; }
+  .efv-verify-error { background: #2a2418; border-color: #92713b; color: #f0ca78; }
+  .efv-hint { color: #81909e; font-size: 9px; line-height: 1.55; }
+  .verified-comparison { padding: 10px; border-color: #397b54; border-radius: 5px; background: #14251c; }
+  .verified-comparison-title { color: #8ce1a9; font-size: 10px; letter-spacing: .05em; }
+  .efv-undo-btn { min-height: 34px; padding: 7px 10px; border-color: #80673b; border-radius: 5px; background: #292317; color: #f0cd83; }
+  .efv-undo-btn:hover:not(:disabled) { background: #362d1c; border-color: #af8a4b; }
+  .efv-undo-scope { color: #93a0ab; }
+  .demo-analyze-btn, .demo-fix-btn, .demo-verify-btn {
+    min-height: 36px;
+    padding: 8px 11px;
+    border-radius: 5px;
+    font-size: 9px;
+    letter-spacing: .035em;
+  }
+  .demo-analyze-btn { border-color: #438bf0; background: #246fd0; }
+  .demo-analyze-btn:hover:not(:disabled) { background: #2f80e6; }
+  .demo-fix-btn { border-color: #43835a; background: #21633b; }
+  .demo-fix-btn:hover:not(:disabled) { background: #2b7a49; }
+  .demo-verify-btn { border-color: #438bf0; background: #246fd0; }
+  .demo-verify-btn:hover:not(:disabled) { background: #2f80e6; }
+  .demo-analysis-status, .demo-fix-status { padding: 8px 9px; border: 1px solid #344252; border-radius: 5px; background: #131c26; color: #b0bdc9; }
+  .demo-fix-result { padding: 8px 9px; border: 1px solid #397b54; border-radius: 5px; background: #14251c; color: #8ce1a9; }
+  .demo-analysis-block { padding: 9px 10px; border: 1px solid #293743; border-radius: 5px; background: #101820; }
+  .demo-analysis-text { color: #d1dbe4; font-size: 10px; line-height: 1.6; }
+
+  @media (max-width: 1150px) {
+    .explorer-panel { width: 205px; min-width: 185px; }
+    .side-panel { width: 285px; min-width: 250px; }
+    .investigate-bar { gap: 12px; }
+    #investigation-outcome { min-width: 230px; }
+  }
+  @media (max-width: 900px) {
+    header { padding-inline: 16px; }
+    .investigate-bar { padding-inline: 16px; }
+    .summary-bar, .legend { padding-inline: 16px; }
+    .explorer-panel { width: 190px; min-width: 160px; }
+    .side-panel { width: 250px; min-width: 210px; }
+  }
+  @media (max-width: 700px) {
+    body { height: auto; min-height: 100vh; overflow: auto; }
+    header { flex-wrap: wrap; gap: 8px 12px; }
+    header .repo { max-width: 100%; width: 100%; margin-left: 0; }
+    .investigate-bar { align-items: stretch; flex-wrap: wrap; }
+    #investigate-button { width: 100%; }
+    #investigation-status, #investigation-outcome { min-width: 100%; max-width: none; }
+    .summary-bar { gap: 6px; }
+    .stat.stat-secondary { display: none; }
+    .legend { gap: 9px; }
+    .legend > span[style] { display: none; }
+    .main { min-height: 0; flex-direction: column; overflow: visible; }
+    .explorer-panel, .side-panel { width: 100%; min-width: 0; border: 0; border-bottom: 1px solid var(--line-soft); }
+    .explorer-panel { max-height: 240px; }
+    #graph-container { flex: none; height: 52vh; min-height: 340px; }
+    .side-panel { min-height: 220px; max-height: 55vh; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ImpactProof</h1>
+  <div class="product-copy">
+    <span class="product-promise">Prove what your code change could break.</span>
+    <span class="product-story">Predict → Prove → Explain → Fix → Verify</span>
+  </div>
+  <span class="repo" id="repo-path"></span>
+</header>
+
+<div class="investigate-bar">
+  <button id="investigate-button" {{INVESTIGATE_DISABLED}}>🔍 INVESTIGATE CHANGE</button>
+  <div id="investigation-status" aria-live="polite">
+    <div id="investigation-message">{{INVESTIGATE_HINT}}</div>
+    <div id="investigation-steps" class="investigation-stages">
+      <span class="investigation-stage" data-stage="analyze">○ Analyze change</span>
+      <span class="investigation-stage" data-stage="graph">○ Build impact graph</span>
+      <span class="investigation-stage" data-stage="proof">○ Prove change</span>
+    </div>
+  </div>
+  <div id="investigation-outcome">
+    <div id="investigation-result" aria-live="assertive"></div>
+    <div id="investigation-summary"></div>
+  </div>
+</div>
+
+<div class="summary-bar" id="summary-bar"><span class="summary-empty">Not investigated</span></div>
+
+<div class="legend" id="graph-legend" hidden>
+  <span class="legend-title">Status</span>
+  <span class="legend-item"><span class="legend-swatch" style="background:#f78166"></span>CHANGED</span>
+  <span class="legend-item"><span class="legend-swatch" style="background:#388bfd"></span>DIRECT</span>
+  <span class="legend-item"><span class="legend-swatch" style="background:#3fb950"></span>INDIRECT</span>
+  <span class="legend-item"><span class="legend-swatch" style="background:#ff6b6b;border:2px solid #ff6b6b;border-radius:2px"></span>REGRESSION (proof)</span>
+  <span style="width:1px;background:#30363d;align-self:stretch;margin:0 4px"></span>
+  <span class="legend-title">Edge</span>
+  <span class="legend-item edge-legend-item"><svg width="26" height="10" style="overflow:visible"><line x1="0" y1="5" x2="22" y2="5" stroke="#388bfd" stroke-width="1.5" marker-end="url(#lp-calls)"/><defs><marker id="lp-calls" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#388bfd"/></marker></defs></svg> symbol dependency</span>
+  <span class="legend-item edge-legend-item"><svg width="26" height="10" style="overflow:visible"><line x1="0" y1="5" x2="22" y2="5" stroke="#8b949e" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#lp-imp)"/><defs><marker id="lp-imp" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#8b949e"/></marker></defs></svg> file import</span>
+</div>
+
+<div class="dashboard-idle" id="dashboard-idle" role="status">
+  <span class="idle-kicker">Ready when you are</span>
+  <h2 id="idle-title">No impact analysis yet.</h2>
+  <p id="idle-description">Run an investigation to build the predicted impact graph and prove the affected behavior.</p>
+</div>
+
+<div class="main" id="main-content" hidden>
+
+  <!-- ── Node Explorer (left) ── -->
+  <div class="explorer-panel">
+    <div class="explorer-header">Node Groups</div>
+    <div class="explorer-scroll" id="explorer-scroll"></div>
+  </div>
+
+  <!-- ── Graph canvas (centre) ── -->
+  <div id="graph-container">
+    <div class="graph-heading" id="predicted-impact-heading" hidden>
+      <strong>PREDICTED IMPACT</strong>
+      <span>Potential blast radius from static analysis</span>
+    </div>
+    <div id="no-data">
+      <span>No impact relationships were found for this change.</span>
+    </div>
+    <svg id="graph-svg"></svg>
+  </div>
+
+  <!-- ── Node Detail (right) ── -->
+  <div class="side-panel">
+    <div class="panel-header">Node Detail</div>
+    <div class="panel-body" id="panel-body">
+      <div class="panel-empty">Click a node to see details.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// Interactive launches defer graph data until the investigation response.
+// ============================================================
+let GRAPH_DATA = {{GRAPH_DATA}};
+let GRAPH_BASE_DATA = null;
+
+// ============================================================
+// Colour mapping
+// ============================================================
+const STATUS_COLOR  = { CHANGED: "#f78166", DIRECT: "#388bfd", INDIRECT: "#3fb950" };
+const STATUS_STROKE = { CHANGED: "#c84b34", DIRECT: "#1a5cbf", INDIRECT: "#2a8c3a" };
+const PROOF_RING_COLOR = "#ff6b6b";
+
+// ============================================================
+// Node grouping — pure data, no DOM side-effects
+// Exported as buildGroups() for external testing
+// ============================================================
+function buildGroups(nodes) {
+  // Sort helper: deterministic by node id
+  const byId = (a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+
+  const regression = nodes.filter(n => n.proof_status === "REGRESSION").sort(byId);
+  const changed    = nodes.filter(n => n.status === "CHANGED").sort(byId);
+  const direct     = nodes.filter(n => n.status === "DIRECT").sort(byId);
+  const indirect   = nodes.filter(n => n.status === "INDIRECT").sort(byId);
+
+  return [
+    { key: "regression", emoji: "🔴", label: "Regression",         nodes: regression, cssClass: "group-regression" },
+    { key: "changed",    emoji: "🟠", label: "Changed",             nodes: changed,    cssClass: "" },
+    { key: "direct",     emoji: "🔵", label: "Directly Affected",   nodes: direct,     cssClass: "" },
+    { key: "indirect",   emoji: "🟢", label: "Indirectly Affected", nodes: indirect,   cssClass: "" },
+  ];
+}
+
+// ============================================================
+// Summary bar
+// ============================================================
+function renderSummary(data) {
+  const s = data.summary || {};
+  document.getElementById("repo-path").textContent = data.repo_path || "";
+  const bar = document.getElementById("summary-bar");
+
+  const items = [
+    { color: "#f78166", label: "Changed files",       value: s.changed_files ?? 0 },
+    { color: "#388bfd", label: "Affected files",       value: s.affected_files ?? 0 },
+    { color: "#a371f7", label: "Symbol relationships", value: s.symbol_relationships ?? 0, secondary: true },
+    { color: "#e6edf3", label: "Graph nodes",          value: data.nodes.length, secondary: true },
+    { color: "#e6edf3", label: "Graph edges",          value: data.edges.length, secondary: true },
+    ...(s.regressions > 0
+      ? [{ color: "#ff6b6b", label: "Regressions", value: s.regressions }]
+      : []),
+  ];
+
+  bar.innerHTML = items.map(it =>
+    `<div class="stat${it.secondary ? " stat-secondary" : ""}">
+       <span class="stat-dot" style="background:${it.color}"></span>
+       <span class="stat-label">${it.label}</span>
+       <span class="stat-value">${it.value}</span>
+     </div>`
+  ).join("");
+}
+
+function setStage(step, state, label) {
+  const stage = document.querySelector(`[data-stage="${step}"]`);
+  if (!stage) return;
+  stage.className = `investigation-stage ${state || ""}`.trim();
+  const icon = state === "complete" ? "✓" : state === "running" ? "●" : state === "error" ? "!" : "○";
+  stage.textContent = `${icon} ${label}`;
+}
+
+function getInvestigationPresentation(data, options = {}) {
+  const pending = { analyze: "", graph: "", proof: "" };
+  if (options.initial || options.running) {
+    return {
+      result: { text: "", className: "" },
+      message: options.running ? "Investigating change…" : "Ready to investigate current changes",
+      stages: pending,
+    };
+  }
+
+  data = data || {};
+  const investigation = data.investigation || {};
+  const scenarioResults = investigation.scenarios || [];
+  const status = investigation.status;
+  if (status === "PASS" || status === "REGRESSION") {
+    return {
+      result: status === "PASS"
+        ? { text: "🟢 PROOF PASSED", className: "pass" }
+        : { text: "🔴 REGRESSION FOUND", className: "regression" },
+      message: "Analysis complete · Proof complete",
+      stages: { analyze: "complete", graph: "complete", proof: "complete" },
+    };
+  }
+  if (status === "ERROR" || status === "NO_SCENARIO") {
+    // run_investigation only returns a terminal result after analysis and graph
+    // construction finish; a returned proof error therefore preserves those
+    // completed stages while clearly leaving proof failed.
+    return {
+      result: status === "NO_SCENARIO"
+        ? { text: "SCENARIO REQUIRED", className: "error" }
+        : { text: "⚠ INVESTIGATION ERROR", className: "error" },
+      message: status === "NO_SCENARIO"
+        ? "Analysis complete · Scenario required"
+        : "Analysis complete · Proof could not be established",
+      stages: { analyze: "complete", graph: "complete", proof: "error" },
+    };
+  }
+  return {
+    result: { text: "", className: "" },
+    message: "Ready to investigate current changes",
+    stages: pending,
+  };
+}
+
+function renderInvestigationStatus(data, options = {}) {
+  data = data || {};
+  const investigation = data.investigation || {};
+  const result = document.getElementById("investigation-result");
+  const summary = document.getElementById("investigation-summary");
+  const message = document.getElementById("investigation-message");
+  const scenarioResults = investigation.scenarios || [];
+  const agent = investigation.agent_workflow || data.agent_workflow || {};
+  const verify = agent.verify_fix || null;
+  const fix = agent.apply_fix || null;
+  const fixed = isdemoFixVerified(fix, verify);
+
+  result.className = "";
+  result.textContent = "";
+  summary.replaceChildren();
+  summary.classList.remove("visible");
+
+  if (options.initial) {
+    const presentation = getInvestigationPresentation(data, options);
+    for (const [step, state] of Object.entries(presentation.stages)) {
+      const labels = { analyze: "Analyze change", graph: "Build impact graph", proof: "Prove change" };
+      setStage(step, state, labels[step]);
+    }
+    message.textContent = presentation.message;
+    return;
+  }
+  if (options.running) {
+    message.textContent = "Investigating change…";
+    return;
+  }
+
+  const presentation = getInvestigationPresentation(data);
+  result.textContent = fixed ? "🟢 FIX VERIFIED" : presentation.result.text;
+  result.className = fixed ? "verified" : presentation.result.className;
+  for (const [step, state] of Object.entries(presentation.stages)) {
+    const labels = { analyze: "Analyze change", graph: "Build impact graph", proof: "Prove change" };
+    setStage(step, state, labels[step]);
+  }
+  message.textContent = presentation.message;
+
+  const proof = scenarioResults.find(item => item.status === "REGRESSION") || scenarioResults[0] || {};
+  const changedNodes = (data.nodes || []).filter(n => n.status === "CHANGED");
+  const regressionNodes = (data.nodes || []).filter(n => n.proof_status === "REGRESSION");
+  const mismatch = ((agent.explain_regression || proof).mismatches || [])[0];
+  const expected = (verify?.expected || agent.explain_regression?.expected || proof.expected || {});
+  const beforeActual = (agent.explain_regression?.actual || proof.actual || {});
+  const afterActual = verify?.actual || {};
+  const details = [];
+  if (changedNodes.length) details.push(["Changed", changedNodes.map(n => `${n.file}${n.symbol ? `::${n.symbol}` : ""}`).join(", ")]);
+  if (!fixed && regressionNodes.length) details.push(["Regression", regressionNodes.map(n => `${n.file}${n.symbol ? `::${n.symbol}` : ""}`).join(", ")]);
+  if (fixed) details.push(["Verified", "Fix applied and proof passed"]);
+  if (mismatch) {
+    details.push(["Expected", `${mismatch.key}: ${expected[mismatch.key] ?? mismatch.expected}`]);
+    if (fixed) details.push(["Before → after", `${mismatch.key}: ${beforeActual[mismatch.key] ?? mismatch.actual} → ${afterActual[mismatch.key]}`]);
+    else details.push(["Actual", `${mismatch.key}: ${beforeActual[mismatch.key] ?? mismatch.actual}`]);
+  }
+  for (const [label, value] of details) {
+    const labelEl = document.createElement("span");
+    labelEl.className = `summary-label summary-label-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "")}`;
+    labelEl.textContent = label;
+    const valueEl = document.createElement("span");
+    valueEl.className = "summary-value";
+    valueEl.textContent = value;
+    summary.append(labelEl, valueEl);
+  }
+  if (details.length) summary.classList.add("visible");
+
+}
+
+// ============================================================
+// Side panel (node detail)
+// ============================================================
+function escapeHtml(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function isdemoFixVerified(fix, verification) {
+  return fix?.status === "applied" && verification?.status === "PASS";
+}
+
+function isProvenRegressionSelected(data, node) {
+  return data?.investigation?.status === "REGRESSION" && node?.proof_status === "REGRESSION";
+}
+
+function renderPanel(node, edges) {
+  const body = document.getElementById("panel-body");
+  if (!node) {
+    body.innerHTML = '<div class="panel-empty">Click a node to see details.</div>';
+    return;
+  }
+
+  const relatedEdges = edges.filter(e =>
+    e.source.id === node.id || e.target.id === node.id
+  );
+
+  let relsHtml = "";
+  if (relatedEdges.length) {
+    const items = relatedEdges.map(e => {
+      const dir   = e.source.id === node.id ? "→" : "←";
+      const other = e.source.id === node.id ? e.target : e.source;
+      return `<div class="rel-item"><strong>${dir} ${other.id}</strong><br>${e.reason || ""}</div>`;
+    }).join("");
+    relsHtml = `<div class="rels-section"><div class="rels-title">Relationships (${relatedEdges.length})</div>${items}</div>`;
+  }
+
+  let proofHtml = "";
+  if (node.proof_status) {
+    const ev      = node.proof_evidence || {};
+    const pstatus = node.proof_status;
+    let   detailRows = "";
+
+    if ((pstatus === "REGRESSION" || pstatus === "PASS") && ev.expected && ev.actual) {
+      const mismatches = ev.mismatches || [];
+      const mismatchKeys = new Set(mismatches.map(m => m.key));
+      const evidenceKeys = [...new Set([
+        ...Object.keys(ev.expected || {}),
+        ...Object.keys(ev.actual || {}),
+      ])];
+      detailRows = `
+        <table class="evidence-table">
+          <thead><tr><th>Evidence</th><th>Expected</th><th>Actual</th></tr></thead>
+          <tbody>${evidenceKeys.map(key => `
+            <tr class="${mismatchKeys.has(key) ? "mismatch-row" : "matched-row"}"><td>${escapeHtml(key)}</td>
+              <td>${escapeHtml(ev.expected?.[key])}</td><td>${escapeHtml(ev.actual?.[key])}</td></tr>
+          `).join("")}</tbody>
+        </table>
+        ${mismatches.length ? `<div class="detail-label">Mismatch</div>
+          ${mismatches.map(m => `<div class="proof-kv-value mismatch">${escapeHtml(m.key)}: ${escapeHtml(m.expected)} expected, ${escapeHtml(m.actual)} actual</div>`).join("")}` : ""}`;
+    } else if (pstatus === "ERROR") {
+      detailRows = `<div class="proof-kv"><span class="proof-kv-label" style="color:#e3b341">Error</span><span class="proof-kv-value" style="color:#e3b341;font-size:10px;word-break:break-all">${(ev.error || "").slice(0, 200)}</span></div>`;
+    } else if (pstatus === "PASS") {
+      detailRows = `<div class="proof-kv"><span class="proof-kv-label">Result</span><span class="proof-kv-value pass">All values matched</span></div>`;
+    }
+
+    const proofEstablished = pstatus === "PASS" || pstatus === "REGRESSION";
+    proofHtml = `
+      <div class="proof-section">
+        <div class="proof-title">${proofEstablished ? "PROVEN BY EXECUTION" : "PROOF NOT ESTABLISHED"}</div>
+        <div class="proof-subtitle">${proofEstablished ? "Observed behavior from deterministic execution" : "Execution did not produce verifiable proof evidence"}</div>
+        <div class="detail-row" style="margin-bottom:8px">
+          <div class="detail-label">Scenario</div>
+          <div class="detail-value">${ev.scenario || ""}</div>
+        </div>
+        <div class="detail-row" style="margin-bottom:8px">
+          <div class="detail-label">Proof status</div>
+          <span class="detail-badge badge-${pstatus}">${pstatus}</span>
+        </div>
+        ${detailRows}
+      </div>`;
+  }
+
+  // Explain results are optional because the demo chat runs outside this viewer.
+  let efvHtml = "";
+  const workflow = node._efv_workflow || node.agent_workflow || GRAPH_DATA.agent_workflow || {};
+  const evData = node._efv_evidence || workflow.explain_regression || null;
+    const fixResult = node._efv_fix || workflow.apply_fix || null;
+    const verifyResult = node._efv_verify || workflow.verify_fix || null;
+  const undoResult = node._efv_undo || workflow.undo_fix || null;
+    const demoAnalysis = node._efv_demo_analysis || workflow.demo_analysis || null;
+    const demoAnalysisStatus = workflow.demo_analysis_status || "idle";
+    const demoFixStatus = workflow.demo_fix_status || "idle";
+    const verifyWorkflowStatus = workflow.verify_status || "idle";
+  const selectedProvenRegression = isProvenRegressionSelected(GRAPH_DATA, node);
+  const hasNodeWorkflow = Boolean(node._efv_workflow || node.agent_workflow
+    || node._efv_evidence || node._efv_fix || node._efv_verify || node._efv_undo);
+  if (selectedProvenRegression || hasNodeWorkflow) {
+    const ev = node.proof_evidence || {};
+    const explainStatus = evData && evData.proof_status ? evData.proof_status : null;
+    const fixApplied = fixResult && fixResult.status === "applied";
+    const verifyStatus = verifyResult && verifyResult.status;
+    const isFixVerified = isdemoFixVerified(fixResult, verifyResult);
+    const steps = [
+      { label: "Explain", done: Boolean(explainStatus || demoAnalysis?.status === "complete"), failed: explainStatus === "ERROR" },
+      { label: "Apply Fix", done: Boolean(fixApplied), failed: Boolean(fixResult && fixResult.error) },
+      { label: "Verify", done: ["PASS", "REGRESSION", "ERROR"].includes(verifyStatus), failed: verifyStatus === "REGRESSION" || verifyStatus === "ERROR" },
+    ];
+    if (isFixVerified || undoResult) {
+      steps.push({
+        label: "Undo (optional)",
+        done: undoResult?.status === "undone",
+        failed: Boolean(undoResult && undoResult.status !== "undone"),
+      });
+    }
+    const workflowSteps = steps.map((step, i) =>
+      `${i ? '<span class="efv-arrow">→</span>' : ""}<span class="efv-state ${step.done ? (step.failed ? "failed" : "complete") : ""}">${step.done ? (step.failed ? "!" : "✓") : "○"} ${step.label}</span>`
+    ).join("");
+
+    // Call-chain block
+    let chainHtml = "";
+    if (evData && evData.call_chains && evData.call_chains.length > 0) {
+      const chain = evData.call_chains[0];
+      const regressionId = node.id;
+      const chainNodes = chain.map((step, i) => {
+        const isLast = i === chain.length - 1;
+        const symPart = regressionId.split("::")[1] || "";
+        const isReg  = step === regressionId || (symPart && step.includes(symPart));
+        const cls    = isReg ? "chain-node regression" : "chain-node";
+        const short  = step.split("/").pop();
+        return `<span class="${cls}">${short}</span>${!isLast ? ' <span class="chain-arrow">→</span> ' : ""}`;
+      }).join("");
+      chainHtml = `
+        <div class="efv-step">
+          <div class="efv-step-label">Call chain to regression</div>
+          <div class="efv-chain">${chainNodes}</div>
+        </div>`;
+    }
+
+    // Source snippet for regression symbol
+    let snippetHtml = "";
+    if (evData && evData.source_snippets) {
+      const regSnippet = evData.source_snippets.find(s => s.role === "regression" && s.symbol === node.symbol);
+      if (regSnippet) {
+      const escaped = escapeHtml(regSnippet.source);
+        snippetHtml = `
+          <div class="efv-step">
+            <div class="efv-step-label">Regression symbol source</div>
+            <div class="efv-step-content">${escaped}</div>
+          </div>`;
+      }
+    }
+
+    // Verification result (populated after verify_fix is called)
+    let verifyHtml = "";
+    if (verifyResult) {
+      const vr = verifyResult;
+      const cls = vr.status === "PASS" ? "pass" : vr.status === "ERROR" ? "error" : "regression";
+      const icon = vr.status === "PASS" ? "✓" : vr.status === "ERROR" ? "⚠" : "✗";
+      verifyHtml = `
+        <div class="efv-step">
+          <div class="efv-step-label">Verification result</div>
+          <div class="efv-verify-result efv-verify-${cls.toLowerCase()}">${icon} ${escapeHtml(vr.status)}</div>
+          ${vr.status === "PASS"
+            ? `<div class="efv-hint">Deterministic proof engine confirmed: expected = actual.</div>`
+            : vr.status === "REGRESSION"
+              ? `<div class="efv-hint">Fix did not resolve the regression. Retry with a different approach.</div>`
+              : `<div class="efv-hint">${escapeHtml((vr.error||"").slice(0,160))}</div>`
+          }
+        </div>`;
+    }
+
+    let verifiedComparison = "";
+    if (isFixVerified && undoResult?.status !== "undone") {
+      const mismatch = (evData?.mismatches || ev.mismatches || [])[0];
+      const key = mismatch?.key;
+      const expected = key ? (evData?.expected || ev.expected || {})[key] : undefined;
+      const before = key ? (evData?.actual || ev.actual || {})[key] : undefined;
+      const after = key ? (verifyResult.actual || {})[key] : undefined;
+      if (key) {
+        verifiedComparison = `<div class="verified-comparison">
+          <div class="verified-comparison-title">🟢 FIX VERIFIED</div>
+          <div class="proof-kv"><span class="proof-kv-label">${escapeHtml(key)}</span><span class="proof-kv-value pass">Expected ${escapeHtml(expected)} · Before ${escapeHtml(before)} · After ${escapeHtml(after)}</span></div>
+        </div>`;
+      }
+    }
+
+    const undoHtml = undoResult?.status === "undone"
+      ? `<div class="efv-undo-result">↩ Demo fix undone. Only its recorded source changes were reversed.</div>`
+      : undoResult
+        ? `<div class="efv-undo-result">Undo refused: ${escapeHtml(undoResult.error || "The demo fix state could not be validated.")}</div>`
+        : isFixVerified
+        ? `<button class="efv-undo-btn" id="undo-demo-fix">↩ UNDO DEMO FIX</button><div class="efv-undo-scope">Reverts only the recorded demo fix.</div>`
+          : "";
+
+    const hasdemoResults = Boolean(
+      evData || fixResult || verifyResult || demoAnalysis
+      || demoAnalysisStatus === "loading" || demoAnalysisStatus === "unavailable"
+    );
+    const regressionReady = selectedProvenRegression;
+    const demoActionHtml = regressionReady && !demoAnalysis
+      ? `<button class="demo-analyze-btn" id="demo-analyze-button"${demoAnalysisStatus === "loading" ? " disabled" : ""}>${demoAnalysisStatus === "loading" ? "Analyzing with demo…" : "EXPLAIN &amp; FIX"}</button>`
+      : "";
+    const demoStateHtml = demoAnalysisStatus === "loading"
+      ? `<div class="demo-analysis-status" role="status">ImpactProof is preparing the execution evidence…</div>`
+      : demoAnalysisStatus === "unavailable"
+        ? `<div class="demo-analysis-status" role="status">Explanation unavailable. Retry the deterministic evidence request.</div>`
+        : "";
+    const demoAnalysisHtml = demoAnalysis ? `
+      <div class="demo-analysis-block">
+        <div class="demo-analysis-label">Root cause</div>
+        <div class="demo-analysis-text">${escapeHtml(demoAnalysis.root_cause)}</div>
+      </div>
+      <div class="demo-analysis-block">
+        <div class="demo-analysis-label">Execution explanation</div>
+        <div class="demo-analysis-text">${escapeHtml(demoAnalysis.demo_message)}</div>
+      </div>
+      <div class="demo-analysis-block">
+        <div class="demo-analysis-label">Proof evidence</div>
+        <div class="demo-analysis-text">${(demoAnalysis.mismatches || []).map(m => `${escapeHtml(m.key)}: expected ${escapeHtml(m.expected)}, actual ${escapeHtml(m.actual)}`).join("\n")}</div>
+      </div>
+      <div class="efv-hint">This read-only analysis does not return or apply a source patch.</div>` : "";
+    const demoFixHtml = demoFixStatus === "loading"
+      ? `<div class="demo-fix-status" role="status">Applying the allowlisted demo fix…</div>`
+      : demoFixStatus === "unavailable"
+        ? `<div class="demo-fix-status" role="status">The demo fix could not be confirmed. Inspect the bundled source before retrying.</div>`
+        : fixApplied
+          ? `<div class="demo-fix-result">✓ Fix applied to ${escapeHtml(fixResult.file)}. Verification has not run yet.</div>
+            ${verifyWorkflowStatus === "loading"
+              ? `<div class="demo-fix-status" role="status">Running deterministic verification…</div>`
+              : !verifyResult
+                ? `<button class="demo-verify-btn" id="verify-demo-fix">🧪 VERIFY FIX</button>`
+                : ""}`
+          : demoFixStatus !== "unavailable"
+            && demoAnalysis?.status === "complete" && demoAnalysis?.proof_status === "REGRESSION"
+            ? `<button class="demo-fix-btn" id="apply-demo-fix"${demoFixStatus === "loading" ? " disabled" : ""}>🔧 APPLY FIX</button>`
+            : "";
+    const hintText = hasdemoResults
+      ? "Review the deterministic explanation and execution evidence before applying the bundled fix."
+      : "ImpactProof derives this explanation from the proof output. No external AI service is used.";
+
+    efvHtml = `
+      <div class="efv-section">
+        <div class="efv-title">EXPLAIN &amp; FIX <span class="efv-badge">REASONING &amp; REMEDIATION</span></div>
+        <div class="efv-steps">${workflowSteps}</div>
+        ${verifiedComparison}
+        ${demoStateHtml}
+        ${demoAnalysisHtml}
+        ${demoFixHtml}
+        ${demoActionHtml}
+        ${!hasdemoResults ? `<div class="efv-hint">${hintText}</div>` : ""}
+        ${chainHtml}
+        ${snippetHtml}
+        ${verifyHtml}
+        ${undoHtml}
+        ${hasdemoResults && !isFixVerified ? `<div class="efv-hint">${hintText}</div>` : ""}
+      </div>`;
+  }
+
+  body.innerHTML = `
+    <div class="detail-row">
+      <div class="detail-label">Impact status</div>
+      <span class="detail-badge badge-${node.status}">${node.status}</span>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">File</div>
+      <div class="detail-value">${node.file}</div>
+    </div>
+    ${node.symbol ? `<div class="detail-row">
+      <div class="detail-label">Symbol</div>
+      <div class="detail-value">${node.symbol}</div>
+    </div>` : ""}
+    ${proofHtml}
+    ${efvHtml}
+    ${relsHtml}
+  `;
+
+  const undoButton = body.querySelector("#undo-demo-fix");
+  if (undoButton) {
+    undoButton.addEventListener("click", async () => {
+      undoButton.disabled = true;
+      undoButton.textContent = "Undoing demo fix…";
+      try {
+        const response = await fetch("/api/undo-fix", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        const result = await response.json();
+        if (result.status === "undone") {
+          workflow.undo_fix = result;
+          const base = JSON.parse(JSON.stringify(GRAPH_BASE_DATA || GRAPH_DATA));
+          base.agent_workflow = workflow;
+          renderViewer(base, true);
+          renderInvestigationStatus(base);
+          document.getElementById("investigation-message").textContent = "Demo fix undone. Re-run investigation to refresh proof status.";
+        } else {
+          undoButton.disabled = false;
+          undoButton.textContent = "↩ UNDO DEMO FIX";
+          let message = body.querySelector(".efv-undo-result");
+          if (!message) {
+            message = document.createElement("div");
+            message.className = "efv-undo-result";
+            undoButton.after(message);
+          }
+          message.textContent = `Undo refused: ${result.error || "The demo fix state could not be validated."}`;
+        }
+      } catch (error) {
+        undoButton.disabled = false;
+        undoButton.textContent = "↩ UNDO DEMO FIX";
+        const message = document.createElement("div");
+        message.className = "efv-undo-result";
+        message.textContent = "Undo service could not be reached. No undo result was received.";
+        undoButton.after(message);
+      }
+    });
+  }
+
+  const fixButton = body.querySelector("#apply-demo-fix");
+  if (fixButton) {
+    fixButton.addEventListener("click", async () => {
+      if (fixButton.disabled) return;
+      GRAPH_DATA.agent_workflow = {
+        ...(GRAPH_DATA.agent_workflow || {}),
+        demo_fix_status: "loading",
+        apply_fix: null,
+        verify_fix: null,
+        verify_status: "idle",
+      };
+      renderPanel(node, edges);
+      try {
+        const response = await fetch("/api/fix", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repo_path: GRAPH_DATA.repo_path }),
+        });
+        const result = await response.json();
+        const fix = result?.fix;
+        const valid = response.ok && result.status === "success"
+          && fix?.status === "applied"
+          && typeof fix.file === "string" && fix.file
+          && typeof fix.undo_id === "string" && fix.undo_id;
+        GRAPH_DATA.agent_workflow = {
+          ...(GRAPH_DATA.agent_workflow || {}),
+          demo_fix_status: valid ? "complete" : "unavailable",
+          apply_fix: valid ? fix : null,
+        };
+      } catch (_error) {
+        GRAPH_DATA.agent_workflow = {
+          ...(GRAPH_DATA.agent_workflow || {}),
+          demo_fix_status: "unavailable",
+          apply_fix: null,
+        };
+      }
+      renderPanel(node, edges);
+    });
+  }
+
+  const verifyButton = body.querySelector("#verify-demo-fix");
+  if (verifyButton) {
+    verifyButton.addEventListener("click", async () => {
+      if (verifyButton.disabled) return;
+      const scenarios = GRAPH_DATA.investigation?.scenarios || [];
+      const scenario = scenarios.find(item => item.status === "REGRESSION")?.scenario
+        || scenarios[0]?.scenario;
+      if (!scenario) {
+        GRAPH_DATA.agent_workflow = {
+          ...(GRAPH_DATA.agent_workflow || {}),
+          verify_status: "complete",
+          verify_fix: { status: "ERROR", error: "No proof scenario is available." },
+        };
+        renderPanel(node, edges);
+        return;
+      }
+      GRAPH_DATA.agent_workflow = {
+        ...(GRAPH_DATA.agent_workflow || {}),
+        verify_status: "loading",
+        verify_fix: null,
+      };
+      renderPanel(node, edges);
+      try {
+        const response = await fetch("/api/verify-fix", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repo_path: GRAPH_DATA.repo_path, scenario }),
+        });
+        const result = await response.json();
+        const verification = result?.verification;
+        const valid = response.ok && result.status === "success"
+          && ["PASS", "REGRESSION", "ERROR"].includes(verification?.status);
+        GRAPH_DATA.agent_workflow = {
+          ...(GRAPH_DATA.agent_workflow || {}),
+          verify_status: valid ? "complete" : "unavailable",
+          verify_fix: valid ? verification : null,
+        };
+      } catch (_error) {
+        GRAPH_DATA.agent_workflow = {
+          ...(GRAPH_DATA.agent_workflow || {}),
+          verify_status: "unavailable",
+          verify_fix: null,
+        };
+      }
+      renderPanel(node, edges);
+      renderInvestigationStatus(GRAPH_DATA);
+    });
+  }
+
+  const demoButton = body.querySelector("#demo-analyze-button");
+  if (demoButton) {
+    demoButton.addEventListener("click", async () => {
+      if (demoButton.disabled) return;
+      const graphWorkflow = GRAPH_DATA.agent_workflow || {};
+      GRAPH_DATA.agent_workflow = {
+        ...graphWorkflow,
+        demo_analysis_status: "loading",
+        demo_analysis: null,
+      };
+      renderPanel(node, edges);
+      try {
+        const response = await fetch("/api/explain", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repo_path: GRAPH_DATA.repo_path }),
+        });
+        const result = await response.json();
+        const analysis = result?.analysis;
+        const valid = response.ok && result.status === "success"
+          && analysis && analysis.status === "complete"
+          && analysis.proof_status === "REGRESSION"
+          && typeof analysis.root_cause === "string" && analysis.root_cause.trim()
+          && typeof analysis.demo_message === "string" && analysis.demo_message.trim()
+          && Array.isArray(analysis.mismatches) && analysis.mismatches.length > 0;
+        GRAPH_DATA.agent_workflow = {
+          ...GRAPH_DATA.agent_workflow,
+          demo_analysis_status: valid ? "complete" : "unavailable",
+          demo_analysis: valid ? analysis : null,
+        };
+      } catch (_error) {
+        GRAPH_DATA.agent_workflow = {
+          ...GRAPH_DATA.agent_workflow,
+          demo_analysis_status: "unavailable",
+          demo_analysis: null,
+        };
+      }
+      renderPanel(node, edges);
+    });
+  }
+}
+
+// ============================================================
+// D3 force graph  — returns focusNode(id) for the explorer
+// ============================================================
+function renderGraph(data) {
+  const container = document.getElementById("graph-container");
+  const svg       = d3.select("#graph-svg");
+  svg.selectAll("*").remove();
+
+  if (!data.nodes || data.nodes.length === 0) {
+    document.getElementById("no-data").classList.add("visible");
+    return { focusNode: () => {} };
+  }
+
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  // Zoom behaviour — keep a reference so we can programmatically zoom
+  const zoomBehavior = d3.zoom().scaleExtent([0.15, 4]);
+  const zoomG = svg.append("g");
+  svg.call(zoomBehavior.on("zoom", e => zoomG.attr("transform", e.transform)));
+
+  // Arrow markers
+  const defs = svg.append("defs");
+  [
+    { id: "arrow-calls", color: "#388bfd" },
+    { id: "arrow-imp",   color: "#8b949e" },
+  ].forEach(({ id, color }) => {
+    defs.append("marker")
+      .attr("id", id)
+      .attr("markerWidth", 7).attr("markerHeight", 7)
+      .attr("refX", 20).attr("refY", 3.5)
+      .attr("orient", "auto")
+      .append("path")
+        .attr("d", "M0,0 L7,3.5 L0,7 Z")
+        .attr("fill", color);
+  });
+
+  // Deep-clone nodes/edges for d3 mutation
+  const nodes = data.nodes.map(n => ({ ...n }));
+  const nodeById = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const edges = data.edges.map(e => ({
+    ...e,
+    source: nodeById[e.source] || e.source,
+    target: nodeById[e.target] || e.target,
+  }));
+
+  // Force simulation
+  const sim = d3.forceSimulation(nodes)
+    .force("link",    d3.forceLink(edges).id(d => d.id).distance(130).strength(0.5))
+    .force("charge",  d3.forceManyBody().strength(-320))
+    .force("center",  d3.forceCenter(W / 2, H / 2))
+    .force("collide", d3.forceCollide(36));
+
+  // Edges
+  const link = zoomG.append("g").selectAll("line")
+    .data(edges)
+    .join("line")
+      .attr("class", d => `link ${d.type}`)
+      .attr("marker-end", d =>
+        d.type === "calls_or_uses" ? "url(#arrow-calls)" : "url(#arrow-imp)"
+      );
+
+  // Nodes
+  let selectedId = null;
+
+  // shared select-and-panel helper used by both graph click and explorer click
+  function selectNode(d) {
+    selectedId = d.id;
+    nodeG.classed("selected", n => n.id === selectedId);
+    renderPanel(d, edges);
+    // sync explorer active state
+    syncExplorerActive(d.id);
+  }
+
+  const nodeRadius = d => d.proof_status === "REGRESSION" ? 20 : d.symbol ? 16 : 13;
+  const nodeG = zoomG.append("g").selectAll("g")
+    .data(nodes)
+    .join("g")
+      .attr("class", d => `node${d.proof_status === "REGRESSION" ? " regression-node" : ""}`)
+      .call(d3.drag()
+        .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on("end",   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+      )
+      .on("click", (e, d) => {
+        e.stopPropagation();
+        selectNode(d);
+      });
+
+  svg.on("click", () => {
+    selectedId = null;
+    nodeG.classed("selected", false);
+    renderPanel(null, edges);
+    syncExplorerActive(null);
+  });
+
+  nodeG.append("circle")
+    .attr("r",            nodeRadius)
+    .attr("fill",         d => STATUS_COLOR[d.status]  || "#8b949e")
+    .attr("stroke",       d => d.proof_status === "REGRESSION" ? PROOF_RING_COLOR : (STATUS_STROKE[d.status] || "#484f58"))
+    .attr("stroke-width", d => d.proof_status === "REGRESSION" ? 3.5 : 2);
+
+  // Outer dashed ring for REGRESSION nodes
+  nodeG.filter(d => d.proof_status === "REGRESSION")
+    .append("circle")
+      .attr("r",              d => nodeRadius(d) + 6)
+      .attr("fill",           "none")
+      .attr("stroke",         PROOF_RING_COLOR)
+      .attr("stroke-width",   2)
+      .attr("stroke-dasharray", "4 2")
+      .attr("opacity",        0.95);
+
+  nodeG.append("text")
+    .attr("dy", d => nodeRadius(d) + 4)
+    .selectAll("tspan")
+    .data(d => d.label.split("\n"))
+    .join("tspan")
+      .attr("x",  0)
+      .attr("dy", (_, i) => i === 0 ? 0 : 12)
+      .text(s => s);
+
+  // Tick
+  sim.on("tick", () => {
+    link
+      .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    nodeG.attr("transform", d => `translate(${d.x},${d.y})`);
+  });
+
+  // Initial zoom-to-fit after simulation ends
+  sim.on("end", () => {
+    const bounds = zoomG.node().getBBox();
+    if (bounds.width === 0) return;
+    const scale = Math.min(0.78, 0.78 * Math.min(W / bounds.width, H / bounds.height));
+    const tx = W / 2 - scale * (bounds.x + bounds.width / 2);
+    const ty = H / 2 - scale * (bounds.y + bounds.height / 2);
+    svg.call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+  });
+
+  // ── focusNode: called by the Node Explorer ──────────────────────────────
+  // Finds the d3 datum by id, selects it, pans/zooms to it, opens detail panel.
+  function focusNode(nodeId) {
+    const datum = nodeById[nodeId];
+    if (!datum) return;
+
+    selectNode(datum);
+
+    // Wait for at least one tick so x/y are valid, then animate pan+zoom
+    const doZoom = () => {
+      if (datum.x == null || datum.y == null) return;
+      const targetScale = 1.25;
+      const tx = W / 2 - targetScale * datum.x;
+      const ty = H / 2 - targetScale * datum.y;
+      svg.transition().duration(500)
+        .call(zoomBehavior.transform,
+              d3.zoomIdentity.translate(tx, ty).scale(targetScale));
+    };
+
+    // If simulation has stopped, coordinates are already valid
+    if (sim.alpha() < 0.01) {
+      doZoom();
+    } else {
+      // wait one tick
+      sim.on("tick.focus", () => { doZoom(); sim.on("tick.focus", null); });
+    }
+  }
+
+  return { focusNode, stop: () => sim.stop() };
+}
+
+// ============================================================
+// Node Explorer renderer
+// ============================================================
+let _syncExplorerActive = () => {};  // set after explorer is built
+
+function syncExplorerActive(nodeId) { _syncExplorerActive(nodeId); }
+
+function renderExplorer(data, focusNodeFn) {
+  const scroll = document.getElementById("explorer-scroll");
+  scroll.innerHTML = "";
+
+  const groups = buildGroups(data.nodes);
+
+  // Track which group headers are open (regression starts open if non-empty)
+  const openState = {};
+  groups.forEach(g => {
+    openState[g.key] = g.key === "regression" && g.nodes.length > 0;
+  });
+
+  let activeNodeId = null;
+  const itemEls = {};  // nodeId -> DOM element (for sync)
+
+  function setActive(nodeId) {
+    // Clear previous
+    if (activeNodeId && itemEls[activeNodeId]) {
+      itemEls[activeNodeId].classList.remove("active");
+    }
+    activeNodeId = nodeId;
+    if (nodeId && itemEls[nodeId]) {
+      itemEls[nodeId].classList.add("active");
+      // Scroll into view within the explorer panel
+      itemEls[nodeId].scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  _syncExplorerActive = setActive;
+
+  groups.forEach(g => {
+    const hasRegressions = g.key === "regression" && g.nodes.length > 0;
+
+    // Group header row
+    const header = document.createElement("div");
+    header.className = "group-header" + (g.cssClass ? " " + g.cssClass : "") + (hasRegressions ? " has-regressions" : "");
+    header.dataset.group = g.key;
+
+    const chevron = document.createElement("span");
+    chevron.className = "group-chevron" + (openState[g.key] ? " open" : "");
+    chevron.textContent = "▶";
+
+    const label = document.createElement("span");
+    label.textContent = g.emoji + " " + g.label;
+
+    const count = document.createElement("span");
+    count.className = "group-count";
+    count.textContent = g.nodes.length;
+
+    header.appendChild(chevron);
+    header.appendChild(label);
+    header.appendChild(count);
+
+    // Node list
+    const list = document.createElement("div");
+    list.className = "node-list" + (openState[g.key] ? " open" : "");
+
+    g.nodes.forEach(n => {
+      const item = document.createElement("div");
+      item.className = "node-list-item" + (g.key === "regression" ? " regression-item" : "");
+      item.textContent = n.id;
+      item.title = n.file + (n.symbol ? "::" + n.symbol : "");
+      item.dataset.nodeId = n.id;
+      itemEls[n.id] = item;
+
+      item.addEventListener("click", e => {
+        e.stopPropagation();
+        setActive(n.id);
+        focusNodeFn(n.id);
+      });
+
+      list.appendChild(item);
+    });
+
+    header.addEventListener("click", () => {
+      openState[g.key] = !openState[g.key];
+      chevron.classList.toggle("open", openState[g.key]);
+      list.classList.toggle("open", openState[g.key]);
+    });
+
+    scroll.appendChild(header);
+    scroll.appendChild(list);
+  });
+}
+
+// ============================================================
+// Boot
+// ============================================================
+let graphView;
+function renderViewer(data, focusResult = false) {
+  document.getElementById("main-content").hidden = false;
+  document.getElementById("graph-legend").hidden = false;
+  document.getElementById("dashboard-idle").hidden = true;
+  document.getElementById("predicted-impact-heading").hidden = false;
+  GRAPH_BASE_DATA = JSON.parse(JSON.stringify(data));
+  const agent = data.investigation?.agent_workflow || data.agent_workflow || {};
+  const fix = agent.apply_fix;
+  const verify = agent.verify_fix;
+  if (isdemoFixVerified(fix, verify) && agent.undo_fix?.status !== "undone") {
+    const explain = agent.explain_regression || null;
+    data = {
+      ...data,
+      agent_workflow: agent,
+      summary: { ...data.summary, regressions: 0 },
+      nodes: data.nodes.map(node => node.proof_status === "REGRESSION" ? {
+        ...node,
+        proof_status: "PASS",
+        proof_evidence: verify,
+        _efv_evidence: explain,
+        _efv_fix: fix,
+        _efv_verify: verify,
+        _efv_workflow: agent,
+      } : node),
+    };
+  }
+  GRAPH_DATA = data;
+  if (graphView) graphView.stop();
+  document.getElementById("no-data").classList.remove("visible");
+  renderSummary(data);
+  graphView = renderGraph(data);
+  renderExplorer(data, graphView.focusNode);
+  const regression = data.nodes.find(n => n.proof_status === "REGRESSION");
+  const verified = data.nodes.find(n => n._efv_verify?.status === "PASS");
+  if (focusResult && (regression || verified)) graphView.focusNode((regression || verified).id);
+  else renderPanel(null, []);
+}
+
+function showDashboardPlaceholder(title, description, summaryText) {
+  document.getElementById("main-content").hidden = true;
+  document.getElementById("graph-legend").hidden = true;
+  document.getElementById("dashboard-idle").hidden = false;
+  document.getElementById("predicted-impact-heading").hidden = true;
+  document.getElementById("idle-title").textContent = title;
+  document.getElementById("idle-description").textContent = description;
+  const summary = document.getElementById("summary-bar");
+  summary.replaceChildren();
+  const state = document.createElement("span");
+  state.className = "summary-empty";
+  state.textContent = summaryText;
+  summary.appendChild(state);
+}
+
+function clearRenderedResults() {
+  GRAPH_DATA = null;
+  GRAPH_BASE_DATA = null;
+  if (graphView) graphView.stop();
+  graphView = null;
+  document.getElementById("graph-svg").replaceChildren();
+  document.getElementById("explorer-scroll").replaceChildren();
+  document.getElementById("panel-body").innerHTML = '<div class="panel-empty">Select a node after investigation to inspect its evidence.</div>';
+}
+
+function showInvestigationFailure(message, activeStep) {
+  const labels = { analyze: "Analyze change", graph: "Build impact graph", proof: "Prove change" };
+  const current = activeStep
+    || investigationSteps.querySelector(".investigation-stage.running")?.dataset.stage
+    || [...investigationSteps.querySelectorAll("[data-stage]")].find(stage => !stage.classList.contains("complete") && !stage.classList.contains("error"))?.dataset.stage
+    || "proof";
+  setStage(current, "error", labels[current]);
+  investigationResult.textContent = "⚠ INVESTIGATION ERROR";
+  investigationResult.className = "error";
+  investigationMessage.textContent = message;
+  clearRenderedResults();
+  showDashboardPlaceholder("Investigation failed.", "No impact graph or proof result is available. Resolve the error and run the investigation again.", "Investigation failed");
+}
+
+if (GRAPH_DATA) {
+  renderViewer(GRAPH_DATA, false);
+  renderInvestigationStatus(GRAPH_DATA);
+} else {
+  renderInvestigationStatus({}, { initial: true });
+}
+
+const investigateButton = document.getElementById("investigate-button");
+const investigationSteps = document.getElementById("investigation-steps");
+const investigationResult = document.getElementById("investigation-result");
+const investigationMessage = document.getElementById("investigation-message");
+investigateButton.addEventListener("click", () => {
+  investigateButton.disabled = true;
+  clearRenderedResults();
+  investigationResult.textContent = "";
+  investigationResult.className = "";
+  showDashboardPlaceholder("Investigation in progress…", "Analysis and proof stages will appear here as they complete.", "Investigation running");
+  investigationMessage.textContent = "Investigating change…";
+  for (const stage of investigationSteps.querySelectorAll("[data-stage]")) {
+    stage.className = "investigation-stage";
+    const labels = { analyze: "Analyze change", graph: "Build impact graph", proof: "Prove change" };
+    stage.textContent = `○ ${labels[stage.dataset.stage]}`;
+  }
+  const labels = { analyze: "Analyze change", graph: "Build impact graph", proof: "Prove change" };
+  const stream = new EventSource("/api/investigate");
+  stream.onmessage = event => {
+    const update = JSON.parse(event.data);
+    if (update.error) {
+      stream.close();
+      const activeStage = investigationSteps.querySelector(".investigation-stage.running")?.dataset.stage || "analyze";
+      showInvestigationFailure(`Investigation stopped: ${update.error}`, activeStage);
+      investigateButton.disabled = false;
+      return;
+    }
+    if (update.step) {
+      setStage(update.step, update.state, labels[update.step] || update.message);
+      if (update.state === "running") investigationMessage.textContent = `${update.message}…`;
+      if (update.state === "error") investigationMessage.textContent = update.message;
+    }
+    if (update.done) {
+      stream.close();
+      const graph = update.graph;
+      const validStatuses = ["PASS", "REGRESSION", "ERROR", "NO_SCENARIO"];
+      if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)
+          || !graph.investigation || !validStatuses.includes(graph.investigation.status)) {
+        showInvestigationFailure("Investigation returned an incomplete result.", "proof");
+        investigateButton.disabled = false;
+        return;
+      }
+      renderViewer(graph, false);
+      renderInvestigationStatus(graph);
+      investigateButton.disabled = false;
+    }
+  };
+  stream.onerror = () => {
+    stream.close();
+    const activeStage = investigationSteps.querySelector(".investigation-stage.running")?.dataset.stage || "analyze";
+    showInvestigationFailure("Could not reach the local investigation bridge.", activeStage);
+    investigateButton.disabled = false;
+  };
+});
+</script>
+</body>
+</html>

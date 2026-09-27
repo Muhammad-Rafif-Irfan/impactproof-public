@@ -1,0 +1,31 @@
+{
+  "scenario": "premium_checkout_refund",
+  "description": "Premium pricing produces final_amount=90; the invoice must preserve the charged amount of 90, and the refund must return the paid amount of 90.",
+  "steps": [
+    {
+      "id": "checkout_step",
+      "module": "checkout",
+      "function": "checkout",
+      "args": [100],
+      "kwargs": {"is_premium": true},
+      "capture": "transaction"
+    },
+    {
+      "id": "refund_step",
+      "module": "refund",
+      "function": "refund",
+      "args_from_capture": ["transaction"],
+      "capture": "refund_amount"
+    }
+  ],
+  "expected": {
+    "final_amount": 90.0,
+    "invoice_final_amount": 90.0,
+    "refund_amount": 90.0
+  },
+  "extract": {
+    "final_amount": {"from_capture": "transaction", "key": "final_amount"},
+    "invoice_final_amount": {"from_capture": "transaction", "key": "invoice.final_amount"},
+    "refund_amount": {"from_capture": "refund_amount", "direct": true}
+  }
+}

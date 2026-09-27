@@ -1,0 +1,35 @@
+# Development tests and local tooling
+**/tests/
+**/test_*.py
+**/*_test.py
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+.pytest_cache/
+TESTING.md
+**/README.md
+
+# Local secrets, logs, and editor state
+.env
+.env.*
+*.log
+*.pem
+*.key
+.DS_Store
+
+# The application creates these only after a fix during a running instance.
+demo/.git/impactproof/undo_state.json
+demo/.git/impactproof/undo_state.lock
+demo/.git/impactproof/
+
+# Git is needed by the analyzer. Keep HEAD, config, index, refs, and the
+# single baseline commit's object database; omit non-runtime Git internals.
+demo/.git/hooks/
+demo/.git/logs/
+demo/.git/info/
+demo/.git/description
+demo/.git/COMMIT_EDITMSG
+demo/.git/ORIG_HEAD
+demo/.git/refs/tags/
+demo/.git/objects/info/
+demo/.git/objects/pack/

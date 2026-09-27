@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111619">
+  <meta name="description" content="ImpactProof predicts code-change impact and proves regressions with deterministic execution evidence.">
+  <title>ImpactProof — Predict. Prove. Verify.</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #111619;
+      --surface: #171d21;
+      --line: #303a40;
+      --text: #f2f3f4;
+      --muted: #abb4bb;
+      --soft: #d8d6ce;
+      --blue: #6ea7ff;
+      --blue-strong: #388bfd;
+      --content: 1100px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+    .shell { width: min(100% - 64px, var(--content)); margin: 0 auto; }
+    .topbar {
+      min-height: 106px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid rgba(151, 166, 176, .16);
+    }
+    .brand { display: inline-flex; align-items: center; text-decoration: none; }
+    .brand img { display: block; width: clamp(270px, 36vw, 390px); height: auto; }
+    .hero { padding: clamp(76px, 11vw, 138px) 0 clamp(90px, 12vw, 142px); }
+    .eyebrow, .section-label {
+      margin: 0 0 22px;
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 940px;
+      margin: 0;
+      font-size: clamp(42px, 7.4vw, 76px);
+      font-weight: 620;
+      line-height: 1.04;
+      letter-spacing: -.058em;
+      text-wrap: balance;
+    }
+    .hero h1 span { color: var(--soft); }
+    .description {
+      max-width: 735px;
+      margin: 28px 0 0;
+      color: #b7c0c6;
+      font-size: clamp(16px, 1.8vw, 19px);
+      line-height: 1.75;
+    }
+    .workflow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin: 34px 0 0;
+      padding: 0;
+      list-style: none;
+      color: #e0e4e6;
+      font-size: 13px;
+      font-weight: 620;
+      letter-spacing: .02em;
+    }
+    .workflow li { display: inline-flex; align-items: center; gap: 12px; }
+    .workflow li:not(:last-child)::after { content: "→"; color: #657682; font-size: 16px; }
+    .actions { margin-top: 43px; }
+    .demo-button {
+      display: inline-flex;
+      min-height: 49px;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      padding: 0 22px;
+      border: 1px solid #4b92f2;
+      border-radius: 4px;
+      background: #1f6feb;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .09em;
+      text-decoration: none;
+      transition: background-color .15s ease;
+    }
+    .demo-button::after { content: "↗"; font-size: 15px; font-weight: 500; }
+    .demo-button:hover, .demo-button:focus-visible { background: #2b7de9; }
+    .demo-button:focus-visible, .brand:focus-visible { outline: 2px solid #8dbbff; outline-offset: 4px; }
+    .note { max-width: 455px; margin: 13px 0 0; color: #939fa7; font-size: 11px; line-height: 1.6; }
+    .section { padding: 88px 0 96px; border-top: 1px solid rgba(151, 166, 176, .16); }
+    .section-heading {
+      max-width: 780px;
+      margin: 0;
+      font-size: clamp(26px, 4vw, 40px);
+      font-weight: 590;
+      line-height: 1.14;
+      letter-spacing: -.045em;
+      text-wrap: balance;
+    }
+    .section-intro { margin: 18px 0 0; color: var(--muted); font-size: 15px; line-height: 1.75; }
+    .demo-story { display: grid; grid-template-columns: minmax(0, .9fr) minmax(340px, 1.1fr); gap: 64px; align-items: center; }
+    .story-copy { max-width: 510px; }
+    .story-copy .section-heading { margin-top: 0; }
+    .pricing-flow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 17px;
+      padding: 25px 0 23px;
+      border-top: 1px solid rgba(151, 166, 176, .25);
+      border-bottom: 1px solid rgba(151, 166, 176, .25);
+    }
+    .price-step { min-width: 0; }
+    .price-step strong { display: block; white-space: nowrap; font-size: clamp(20px, 2.7vw, 29px); font-weight: 580; letter-spacing: -.045em; }
+    .price-step small { display: block; margin-top: 8px; color: #9da9b1; font-size: 11px; line-height: 1.4; }
+    .price-arrow { flex: 0 0 auto; color: var(--blue); font-size: 18px; }
+    .chain-intro { max-width: 660px; margin: 18px 0 30px; color: var(--muted); font-size: 15px; line-height: 1.75; }
+    .chain {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      align-items: center;
+      gap: 0;
+      margin: 0 0 32px;
+      padding: 0;
+      list-style: none;
+    }
+    .chain li { position: relative; display: grid; grid-template-rows: 7px auto; justify-items: center; gap: 12px; min-width: 0; color: #dce2e5; font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: center; }
+    .chain li:not(:last-child)::after { content: ""; position: absolute; z-index: 0; top: 3px; left: 50%; width: 100%; height: 1px; background: #53636d; }
+    .chain li::before { content: ""; z-index: 1; grid-row: 1; width: 7px; height: 7px; border: 1px solid #6ea7ff; border-radius: 50%; background: var(--background); }
+    .chain li span { grid-row: 2; white-space: nowrap; }
+    .code-frame { overflow: hidden; border: 1px solid rgba(151, 166, 176, .2); border-radius: 5px; background: #0c1114; }
+    .code-comparison { display: grid; grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); align-items: center; gap: 12px; }
+    .code-title { display: flex; min-height: 62px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; padding: 11px 16px; border-bottom: 1px solid rgba(151, 166, 176, .15); color: #e0e5e8; font: 700 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .06em; }
+    .code-title span:last-child { color: #83919a; font-size: 10px; font-weight: 450; letter-spacing: 0; }
+    .comparison-arrow { color: #7e8c95; font-size: 18px; text-align: center; }
+    pre { overflow-x: auto; margin: 0; padding: 19px 20px 21px; color: #d8e0e4; font: 13px/1.75 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 4; }
+    code { font: inherit; }
+    .code-row { display: block; white-space: pre; }
+    .code-row.added { position: relative; color: #9bc2ff; }
+    .code-row.added::before { position: absolute; left: -12px; color: #6ea7ff; content: "+"; }
+    .code-caption { margin: 17px 0 0; color: #9ca8af; font-size: 12px; line-height: 1.6; text-align: center; }
+    .evidence-section { padding-bottom: 86px; }
+    .evidence-heading { text-align: center; }
+    .evidence-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 52px; margin-top: 54px; }
+    .evidence-item { padding-top: 16px; border-top: 1px solid rgba(151, 166, 176, .28); }
+    .evidence-item h3 { margin: 0; color: #dce3e7; font-size: 12px; font-weight: 740; letter-spacing: .12em; }
+    .evidence-item p { max-width: 290px; margin: 13px 0 0; color: #aab4bb; font-size: 14px; line-height: 1.7; }
+    .distinction { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 66px; color: #d9dfe2; font-size: clamp(15px, 2vw, 19px); letter-spacing: .17em; text-transform: uppercase; }
+    .distinction::before, .distinction::after { content: ""; width: min(14vw, 120px); height: 1px; background: #46545d; }
+    .distinction span { color: #82909a; }
+    .closing { padding: 86px 0 92px; border-top: 1px solid rgba(151, 166, 176, .16); }
+    .closing-inner { display: flex; align-items: center; justify-content: space-between; gap: 36px; }
+    .closing .section-heading { font-size: clamp(30px, 4.4vw, 46px); }
+    .closing .section-intro { max-width: 560px; }
+    .closing .actions { flex: 0 0 auto; margin: 0; }
+    footer { display: flex; align-items: center; justify-content: space-between; min-height: 76px; border-top: 1px solid rgba(151, 166, 176, .16); color: #96a1a8; font-size: 12px; }
+    footer strong { color: #dfe3e4; font-weight: 620; letter-spacing: -.02em; }
+    @media (max-width: 760px) {
+      .demo-story { grid-template-columns: 1fr; gap: 36px; }
+      .evidence-grid { gap: 24px; }
+      .closing-inner { align-items: flex-start; flex-direction: column; }
+      .code-comparison { grid-template-columns: minmax(0, 1fr); gap: 13px; }
+      .comparison-arrow { transform: rotate(90deg); }
+      .code-caption { text-align: left; }
+    }
+    @media (max-width: 600px) {
+      .shell { width: min(100% - 40px, var(--content)); }
+      .topbar { min-height: 82px; }
+      .brand img { width: min(78vw, 330px); }
+      .hero { padding: 80px 0 88px; }
+      .eyebrow, .section-label { margin-bottom: 17px; font-size: 10px; }
+      h1 { font-size: clamp(39px, 11vw, 56px); }
+      .description { margin-top: 23px; font-size: 16px; }
+      .workflow { gap: 8px; margin-top: 27px; font-size: 12px; }
+      .workflow li { gap: 8px; }
+      .actions { margin-top: 34px; }
+      .demo-button { width: 100%; }
+      .section { padding: 68px 0 74px; }
+      .pricing-flow { gap: 9px; padding: 21px 0; }
+      .price-step strong { font-size: clamp(17px, 5.1vw, 22px); }
+      .price-step small { max-width: 88px; font-size: 10px; }
+      .price-arrow { font-size: 15px; }
+      .chain { grid-template-columns: 1fr; gap: 0; margin: 27px 0; }
+      .chain li { grid-template-columns: 7px 1fr; grid-template-rows: auto; justify-items: start; align-items: center; gap: 13px; min-height: 42px; text-align: left; }
+      .chain li:not(:last-child)::after { top: 50%; left: 3px; width: 1px; height: 100%; }
+      .chain li::before { grid-column: 1; grid-row: 1; }
+      .chain li span { grid-column: 2; grid-row: 1; }
+      .evidence-grid { grid-template-columns: 1fr; gap: 25px; margin-top: 36px; }
+      .evidence-item { padding-top: 14px; }
+      .evidence-item p { max-width: none; margin-top: 9px; }
+      .distinction { gap: 10px; margin-top: 43px; font-size: 13px; letter-spacing: .12em; }
+      .closing { padding: 70px 0 76px; }
+      .closing .actions { width: 100%; }
+      footer { min-height: 68px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="ImpactProof home">
+        <img src="/assets/impactproof-logo.png" alt="ImpactProof">
+      </a>
+    </header>
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">Change impact · Execution proof</p>
+        <h1 id="hero-title">Predict what your code change could break,<br><span>then prove it by execution.</span></h1>
+        <p class="description">ImpactProof connects change impact analysis with deterministic execution evidence, helping developers predict potential blast radius, identify regressions, and verify fixes.</p>
+        <ol class="workflow" aria-label="ImpactProof workflow">
+          <li>Predict</li><li>Prove</li><li>Explain</li><li>Fix</li><li>Verify</li>
+        </ol>
+        <div class="actions">
+          <a class="demo-button" href="/demo">DEMO NOW</a>
+          <p class="note">Demo runs on a preconfigured sample repository and scenario. User-provided source code is not analyzed.</p>
+        </div>
+      </section>
+
+      <section class="section demo-story" aria-labelledby="demo-title">
+        <div class="story-copy">
+          <p class="section-label">What are we demonstrating?</p>
+          <h2 class="section-heading" id="demo-title">Introduce a premium pricing policy.</h2>
+          <p class="section-intro">The developer adds a premium pricing policy to the checkout flow. Premium customers receive a 10% discount when the purchase meets the minimum spend.</p>
+        </div>
+        <div class="pricing-flow" aria-label="$100 purchase, 10 percent premium discount, $90 final payment">
+          <div class="price-step"><strong>$100</strong><small>purchase</small></div>
+          <span class="price-arrow" aria-hidden="true">→</span>
+          <div class="price-step"><strong>10%</strong><small>premium discount</small></div>
+          <span class="price-arrow" aria-hidden="true">→</span>
+          <div class="price-step"><strong>$90</strong><small>final payment</small></div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="change-title">
+        <p class="section-label">The code change</p>
+        <h2 class="section-heading" id="change-title">One change. A downstream payment flow.</h2>
+        <p class="chain-intro">The change starts in discount.py, but its behavior propagates through the downstream payment and refund flow.</p>
+        <ol class="chain" aria-label="Dependency chain: discount.py, checkout.py, payment.py, invoice.py, refund.py">
+          <li><span>discount.py</span></li><li><span>checkout.py</span></li><li><span>payment.py</span></li><li><span>invoice.py</span></li><li><span>refund.py</span></li>
+        </ol>
+        <div class="code-comparison" aria-label="discount.py before and after comparison">
+          <div class="code-frame">
+            <div class="code-title"><span>BEFORE</span><span>discount.py · baseline</span></div>
+            <pre><code><span class="code-row">def calculate_total(price: float, is_premium: bool = False) -&gt; float:</span><span class="code-row">    total = price</span><span class="code-row">    return total</span></code></pre>
+          </div>
+          <span class="comparison-arrow" aria-hidden="true">→</span>
+          <div class="code-frame">
+            <div class="code-title"><span>AFTER</span><span>discount.py · premium pricing change</span></div>
+            <pre><code><span class="code-row added">PREMIUM_DISCOUNT = 0.10</span><span class="code-row added">PREMIUM_MINIMUM_SPEND = 50.0</span><span class="code-row blank"></span><span class="code-row">def calculate_total(price: float, is_premium: bool = False) -&gt; float:</span><span class="code-row added">    if is_premium and price &gt;= PREMIUM_MINIMUM_SPEND:</span><span class="code-row added">        return round(price * (1 - PREMIUM_DISCOUNT), 2)</span><span class="code-row blank"></span><span class="code-row">    return price</span></code></pre>
+          </div>
+        </div>
+        <p class="code-caption">One local change can propagate through the downstream payment flow.</p>
+      </section>
+
+      <section class="section evidence-section" aria-labelledby="evidence-title">
+        <p class="section-label evidence-heading">What ImpactProof does</p>
+        <h2 class="section-heading evidence-heading" id="evidence-title">From change to evidence</h2>
+        <div class="evidence-grid">
+          <article class="evidence-item"><h3>PREDICT</h3><p>Map the potential blast radius from the actual code change.</p></article>
+          <article class="evidence-item"><h3>PROVE</h3><p>Execute deterministic scenarios and compare expected vs actual behavior.</p></article>
+          <article class="evidence-item"><h3>VERIFY</h3><p>Confirm that the applied fix restores the expected behavior.</p></article>
+        </div>
+        <div class="distinction">Prediction <span>≠</span> Proof</div>
+      </section>
+
+      <section class="closing" aria-labelledby="closing-title">
+        <div class="closing-inner">
+          <div>
+            <h2 class="section-heading" id="closing-title">See the change propagate.</h2>
+            <p class="section-intro">Run the preconfigured demo and watch ImpactProof move from predicted impact to execution evidence.</p>
+          </div>
+          <div class="actions"><a class="demo-button" href="/demo">DEMO NOW</a></div>
+        </div>
+      </section>
+      <footer><strong>ImpactProof</strong><span>Built with IBM Bob</span></footer>
+    </main>
+  </div>
+</body>
+</html>
